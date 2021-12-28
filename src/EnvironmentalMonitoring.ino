@@ -1,25 +1,25 @@
 #include <WiFi.h>
-extern "C" {
-  #include "freertos/FreeRTOS.h"
-  #include "freertos/timers.h"
-}
-
 #include <Secrets.h>
 #include <AsyncMqttClient.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <Button2.h>
+
+#define FASTLED_INTERNAL
 #include <FastLED.h> 
+
+extern "C" {
+  #include "freertos/FreeRTOS.h"
+  #include "freertos/timers.h"
+}
 
 #define ONE_WIRE_BUS 26
 #define TEMPERATURE_PRECISION 12
-
 #define PIN_LEDATOM 27
-CRGB ledAtom[1];
-
 #define BUTTON_PIN 39
-Button2 button;
 
+CRGB ledAtom[1];
+Button2 button;
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
@@ -43,7 +43,6 @@ void connectToMqtt() {
 }
 
 void WiFiEvent(WiFiEvent_t event) {
-  Serial.printf("[WiFi  ] Event code: %d\n", event);
   switch(event) {
     case SYSTEM_EVENT_STA_GOT_IP:
       Serial.println("[WiFi  ] Wi-Fi connected.");
@@ -56,6 +55,8 @@ void WiFiEvent(WiFiEvent_t event) {
       ledAtom[0].setRGB(255,0,0); FastLED.show();
       xTimerStop(mqttReconnectTimer, 0); // Avoid reconnecting to MQTT while Wi-Fi is down.
       xTimerStart(wifiReconnectTimer, 0);
+      break;
+    default:
       break;
   }
 }
@@ -103,8 +104,7 @@ void searchDevices() {
     {
       Serial.print("[Sensor] Found device ");
       Serial.print(i, DEC);
-      Serial.print(" with address ");
-      printAddress(tempDeviceAddress);
+      Serial.print(" with address " + getAddress(tempDeviceAddress));
       Serial.println("."); 
 
       Serial.print("[Sensor] Setting resolution to ");
@@ -155,7 +155,7 @@ void setup() {
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onPublish(onMqttPublish);
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
-  //mqttClient.setCredentials("USER", "PASSW");
+  //mqttClient.setCredentials("USER", "PASS");
 
   WiFi.onEvent(WiFiEvent);
   connectToWifi();
@@ -168,11 +168,8 @@ void loop() {
 
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
-    
     previousMillis = currentMillis;
-
     readSensors();
-
   }
 
 }
@@ -182,7 +179,7 @@ void readSensors() {
   ledAtom[0].setRGB(0,50,0); FastLED.show();
 
   Serial.println("[Sensor] Requesting temperatures...");
-  sensors.requestTemperatures(); // Send the command to get temperatures
+  sensors.requestTemperatures();
   Serial.println("[Sensor] Temperature  request complete.");
 
   // Loop through each device and print out temperature data...
@@ -193,13 +190,13 @@ void readSensors() {
     if(sensors.getAddress(tempDeviceAddress, i))
     {
 
+      // Get address string and read the current temperature...
       String strAddress = getAddress(tempDeviceAddress);
-
-      // Read the current temperature...
       float tempC = sensors.getTempC(tempDeviceAddress);
       
       if(tempC == DEVICE_DISCONNECTED_C) 
       {
+        // Report if there is an error reading from the device...
         Serial.println("[Sensor] Error: Could not read temperature data for " + strAddress + ".");
       } else {
       
@@ -209,30 +206,23 @@ void readSensors() {
         // Publish an MQTT message...
         String topic = MQTT_PREFIX + strAddress + "/temp";
         uint16_t packetIdPub = mqttClient.publish(topic.c_str(), 1, true, String(tempC).c_str());                            
-        Serial.printf("[MQTT  ] Publishing on topic %s, payload ", topic);
+        Serial.printf("[MQTT  ] Publishing on topic %s, payload ", topic.c_str());
         Serial.printf("%.2f, packet ID=", tempC);
         Serial.print(packetIdPub);
         Serial.println(".");
         
       }
-
+      
     } 
 
   }
 
+  // Return the status LED to standby...
   ledAtom[0].setRGB(0,0,50); FastLED.show();
 
 }
 
-void printAddress(DeviceAddress deviceAddress)
-{
-  for (uint8_t i = 0; i < 8; i++)
-  {
-    if (deviceAddress[i] < 16) Serial.print("0");
-    Serial.print(deviceAddress[i], HEX);
-  }
-}
-
+// Convert device address to string...
 String getAddress(DeviceAddress deviceAddress)
 {
   char address[17];
@@ -246,7 +236,7 @@ String getAddress(DeviceAddress deviceAddress)
   return String(address);
 }
 
-/////////////////////////////////////////////////////////////////
+// Button Click Functions...
 
 void click(Button2& btn) {
     Serial.println("[Button] Click");
@@ -260,6 +250,3 @@ void longClickDetected(Button2& btn) {
 void doubleClick(Button2& btn) {
     Serial.println("[Button] Double Click");
 }
-
-
-/////////////////////////////////////////////////////////////////
