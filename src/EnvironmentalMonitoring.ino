@@ -272,25 +272,29 @@ void readSensors() {
     if(sensors.getAddress(tempDeviceAddress, i))
     {
 
+      // Check for mismatch, and re-boot if needed...
+      String strAddress = addressToString(tempDeviceAddress);
+      if (strAddress != deviceAddresses[i]) { ESP.restart(); }
+
       // Read the current temperature...
       float tempC = sensors.getTempC(tempDeviceAddress);
       
       if(tempC == DEVICE_DISCONNECTED_C) 
       {
         // Report if there is an error reading from the device...
-        Serial.println("[Sensor] Error: Could not read temperature data for " + deviceAddresses[i] + ".");
+        Serial.println("[Sensor] Error: Could not read temperature data for " + strAddress + ".");
       } else {
       
         // Log the address and reading...
-        Serial.println("[Sensor] Temperature for device " + deviceAddresses[i] + " is " + tempC + " C.");
+        Serial.println("[Sensor] Temperature for device " + strAddress + " is " + tempC + " C.");
         
         // Check the alarm...
         bool isAlarming = tempC > alarmTemp[i];
         alarmState = alarmState | isAlarming;
 
         // Publish an MQTT message...
-        publishPayload(MQTT_PREFIX + deviceAddresses[i] + "/temp", String(tempC));
-        publishPayload(MQTT_PREFIX + deviceAddresses[i] + "/alarm", String(isAlarming));
+        publishPayload(MQTT_PREFIX + strAddress + "/temp", String(tempC));
+        publishPayload(MQTT_PREFIX + strAddress + "/alarm", String(isAlarming));
 
       }
       
@@ -326,11 +330,13 @@ String addressToString(DeviceAddress deviceAddress)
 
 void click(Button2& btn) {
     Serial.println("[Button] Click");
+    readSensors();
 }
 
 void longClickDetected(Button2& btn) {
     Serial.println("[Button] Long Click");
-    searchDevices();
+    //searchDevices();
+    ESP.restart();
 }
 
 void doubleClick(Button2& btn) {
