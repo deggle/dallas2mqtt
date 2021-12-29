@@ -13,6 +13,7 @@ extern "C" {
   #include "freertos/timers.h"
 }
 
+#define MAX_SENSORS 10
 #define ONE_WIRE_BUS 26
 #define TEMPERATURE_PRECISION 12
 #define PIN_LEDATOM 27
@@ -31,6 +32,9 @@ int numberOfDevices;                // Number of devices found at boot time.
 unsigned long previousMillis = 0;   // Stores last time temperature was published.
 const long interval = 10000;        // Interval at which to publish sensor readings.
 DeviceAddress tempDeviceAddress;    // Holds current address while looping.
+String deviceAddresses[MAX_SENSORS];// Stores string addresses for devices.
+int alarmTemp[MAX_SENSORS];         // Store alarm temp for each device.
+bool alarmState = false;            // Hold the current alarm state.
 
 void connectToWifi() {
   Serial.println("[WiFi  ] Connecting to Wi-Fi...");
@@ -52,7 +56,7 @@ void WiFiEvent(WiFiEvent_t event) {
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
       Serial.println("[WiFi  ] Wi-Fi connection lost.");
-      ledAtom[0].setRGB(255,0,0); FastLED.show();
+      setLED(255,0,0);
       xTimerStop(mqttReconnectTimer, 0); // Avoid reconnecting to MQTT while Wi-Fi is down.
       xTimerStart(wifiReconnectTimer, 0);
       break;
@@ -64,23 +68,62 @@ void WiFiEvent(WiFiEvent_t event) {
 void onMqttConnect(bool sessionPresent) {
   Serial.print("[MQTT  ] Connected to MQTT, Client ID: ");
   Serial.println(mqttClient.getClientId());
+
+  // Search for devices...
+  searchDevices();
+
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
   Serial.println("[MQTT  ] Disconnected from MQTT.");
-  ledAtom[0].setRGB(255,0,0); FastLED.show();
+  setLED(255,0,0);
   if (WiFi.isConnected()) {
     xTimerStart(mqttReconnectTimer, 0);
   }
 }
 
 void onMqttPublish(uint16_t packetId) {
-  Serial.print("[MQTT  ] Publish acknowledged, packet ID=");
+  Serial.print("[MQTT  ] Publish acknowledged, packet ID=" + String(packetId) + ".\n");
+}
+
+void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
+  Serial.print("[MQTT  ] Subscribe acknowledged, packet ID=");
   Serial.print(packetId);
+  Serial.print(", QoS ");
+  Serial.print(qos);
   Serial.println(".");
 }
 
+void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
+  Serial.print("[MQTT  ] Message received on topic ");
+  Serial.print(topic);
+  Serial.print(", payload ");
+  Serial.print(String(payload));
+  Serial.println(".");
+
+  // Is this an alarm set point?
+  if (String(topic).endsWith("/set")) {
+
+    // Get the address of the device to set...
+    String deviceAddress = String(topic);
+    deviceAddress.replace(MQTT_PREFIX, "");
+    deviceAddress.replace("/set","");
+    deviceAddress.toLowerCase();
+    Serial.println("[Sensor] Setting alarm setpoint for device " + deviceAddress + ".");
+
+    // Which ID is this device...
+    int deviceIndex = deviceAddresses->indexOf(deviceAddress);
+    alarmTemp[deviceIndex] = String(payload).toInt();
+    Serial.println("[Sensor] Alarm setpoint for device " + deviceAddress + " (ID=" + deviceIndex + ") set to " + alarmTemp[deviceIndex] + ".");
+  
+  }
+
+}
+
 void searchDevices() {
+
+  // Reset arrays...
+  resetArrays();
 
   Serial.println("[Sensor] Searching for 1-wire devices...");
 
@@ -102,9 +145,11 @@ void searchDevices() {
   {
     if(sensors.getAddress(tempDeviceAddress, i))
     {
+      deviceAddresses[i] = addressToString(tempDeviceAddress);
+
       Serial.print("[Sensor] Found device ");
       Serial.print(i, DEC);
-      Serial.print(" with address " + getAddress(tempDeviceAddress));
+      Serial.print(" with address " + deviceAddresses[i]);
       Serial.println("."); 
 
       Serial.print("[Sensor] Setting resolution to ");
@@ -115,6 +160,15 @@ void searchDevices() {
       Serial.print("[Sensor] Resolution currently set to: ");
       Serial.print(sensors.getResolution(tempDeviceAddress), DEC); 
       Serial.println();
+
+      // Subscribing to alarm set temp...
+      String topic = MQTT_PREFIX + deviceAddresses[i] + "/set";
+      Serial.print("[MQTT  ] Subscribing to ");
+      Serial.print(topic.c_str());
+      Serial.println("."); 
+
+      mqttClient.subscribe(topic.c_str(), 2);
+
     }else{
       Serial.print("[Sensor] Found ghost device at ");
       Serial.print(i, DEC);
@@ -124,10 +178,36 @@ void searchDevices() {
     
 }
 
+void resetArrays() {
+  for(int i = 0; i < MAX_SENSORS; i++) {
+    deviceAddresses[i] = "";
+    alarmTemp[i] = -99;
+  }
+}
+
+void setLED(uint8_t nr, uint8_t ng, uint8_t nb) {
+  
+  // Are we in standby?
+  if (nr == 0 && ng == 0 && nb == 0) {
+    
+    // Is there an alarm?
+    if (alarmState) {
+      nr = 255;
+    } else {
+      nb = 50;
+    }
+
+  }
+
+  ledAtom[0].setRGB(nr,ng,nb);
+  FastLED.show();
+
+}
+
 void setup() {
 
   FastLED.addLeds<NEOPIXEL, PIN_LEDATOM>(ledAtom, 1);
-  ledAtom[0].setRGB(255,0,0); FastLED.show();
+  setLED(255,0,0);
 
   Serial.begin(115200);
   delay(50);
@@ -145,15 +225,14 @@ void setup() {
   button.setLongClickDetectedHandler(longClickDetected);
   button.setDoubleClickHandler(doubleClick);
 
-  // Search for devices...
-  searchDevices();
-
   mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
   wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
 
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onPublish(onMqttPublish);
+  mqttClient.onSubscribe(onMqttSubscribe);
+  mqttClient.onMessage(onMqttMessage);
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
   //mqttClient.setCredentials("USER", "PASS");
 
@@ -176,11 +255,14 @@ void loop() {
 
 void readSensors() {
 
-  ledAtom[0].setRGB(0,50,0); FastLED.show();
+  setLED(0,50,0);
 
   Serial.println("[Sensor] Requesting temperatures...");
   sensors.requestTemperatures();
   Serial.println("[Sensor] Temperature  request complete.");
+  
+  // Reset the alarm...
+  alarmState = false;
 
   // Loop through each device and print out temperature data...
   for(int i=0;i<numberOfDevices; i++)
@@ -190,27 +272,26 @@ void readSensors() {
     if(sensors.getAddress(tempDeviceAddress, i))
     {
 
-      // Get address string and read the current temperature...
-      String strAddress = getAddress(tempDeviceAddress);
+      // Read the current temperature...
       float tempC = sensors.getTempC(tempDeviceAddress);
       
       if(tempC == DEVICE_DISCONNECTED_C) 
       {
         // Report if there is an error reading from the device...
-        Serial.println("[Sensor] Error: Could not read temperature data for " + strAddress + ".");
+        Serial.println("[Sensor] Error: Could not read temperature data for " + deviceAddresses[i] + ".");
       } else {
       
         // Log the address and reading...
-        Serial.println("[Sensor] Temperature for device " + strAddress + " is " + tempC + " C.");
+        Serial.println("[Sensor] Temperature for device " + deviceAddresses[i] + " is " + tempC + " C.");
         
+        // Check the alarm...
+        bool isAlarming = tempC > alarmTemp[i];
+        alarmState = alarmState | isAlarming;
+
         // Publish an MQTT message...
-        String topic = MQTT_PREFIX + strAddress + "/temp";
-        uint16_t packetIdPub = mqttClient.publish(topic.c_str(), 1, true, String(tempC).c_str());                            
-        Serial.printf("[MQTT  ] Publishing on topic %s, payload ", topic.c_str());
-        Serial.printf("%.2f, packet ID=", tempC);
-        Serial.print(packetIdPub);
-        Serial.println(".");
-        
+        publishPayload(MQTT_PREFIX + deviceAddresses[i] + "/temp", String(tempC));
+        publishPayload(MQTT_PREFIX + deviceAddresses[i] + "/alarm", String(isAlarming));
+
       }
       
     } 
@@ -218,12 +299,17 @@ void readSensors() {
   }
 
   // Return the status LED to standby...
-  ledAtom[0].setRGB(0,0,50); FastLED.show();
+  setLED(0,0,0);
 
 }
 
+void publishPayload(String topic, String payload) {
+    uint16_t packetIdPub = mqttClient.publish(topic.c_str(), 1, true, payload.c_str());
+    Serial.print("[MQTT  ] Publishing on topic " + topic + ", payload " + payload + ", packet ID=" + String(packetIdPub) + ".\n");
+}
+
 // Convert device address to string...
-String getAddress(DeviceAddress deviceAddress)
+String addressToString(DeviceAddress deviceAddress)
 {
   char address[17];
   char buffer[3];
