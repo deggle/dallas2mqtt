@@ -169,6 +169,11 @@ void searchDevices() {
 
       mqttClient.subscribe(topic.c_str(), 2);
 
+      // Send the HA discovery packet if desired...
+      if (HA_DISCOVERY) {
+        publishDiscovery(deviceAddresses[i]);
+      }
+
     }else{
       Serial.print("[Sensor] Found ghost device at ");
       Serial.print(i, DEC);
@@ -278,7 +283,8 @@ void readSensors() {
 
       // Read the current temperature...
       float tempC = sensors.getTempC(tempDeviceAddress);
-      
+      tempC = round(tempC*10)/10;
+
       if(tempC == DEVICE_DISCONNECTED_C) 
       {
         // Report if there is an error reading from the device...
@@ -310,6 +316,20 @@ void readSensors() {
 void publishPayload(String topic, String payload) {
     uint16_t packetIdPub = mqttClient.publish(topic.c_str(), 1, true, payload.c_str());
     Serial.print("[MQTT  ] Publishing on topic " + topic + ", payload " + payload + ", packet ID=" + String(packetIdPub) + ".\n");
+}
+
+void publishDiscovery(String device) {
+
+  // Send HA discovery packet for temperature sensor...
+  String discoveryTopic = "homeassistant/sensor/px-env-" + device + "/config";
+  String discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"px-env-" + device + "-temp\",\"name\": \"Temperature (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/temp\",\"unit_of_measurement\": \"°C\",\"value_template\": \"{{ value | round(1) }}\"}";
+  publishPayload(discoveryTopic, discoveryPayload);
+
+  // Send HA discovery packet for alarm state...
+  discoveryTopic = "homeassistant/binary_sensor/px-env-" + device + "/config";
+  discoveryPayload = "{\"device_class\": \"safety\",\"unique_id\": \"px-env-" + device + "-alarm\",\"name\": \"Alarm (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\"}";
+  publishPayload(discoveryTopic, discoveryPayload);
+
 }
 
 // Convert device address to string...
