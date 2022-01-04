@@ -371,21 +371,21 @@ void publishPayload(String topic, String payload) {
 void publishDiscovery(String device) {
 
   // Send HA discovery packet for temperature sensor...
-  String discoveryTopic = "homeassistant/sensor/px-env-" + device + "/config";
-  String discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"px-env-" + device + "-temp\",\"name\": \"Temperature (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/temp\",\"unit_of_measurement\": \"°C\",\"value_template\": \"{{ value | round(1) }}\"}";
+  String discoveryTopic = "homeassistant/sensor/" + String(HA_PREFIX) + device + "/config";
+  String discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-temp\",\"name\": \"Temperature (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/temp\",\"unit_of_measurement\": \"°C\",\"value_template\": \"{{ value | round(1) }}\"}";
   publishPayload(discoveryTopic, discoveryPayload);
 
   // Send HA discovery packet for alarm setpoints...
-  discoveryTopic = "homeassistant/sensor/px-env-" + device + "-alarm-low/config";
-  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"px-env-" + device + "-alarm-low\",\"name\": \"Low Alarm Setpoint (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-low\",\"unit_of_measurement\": \"°C\"}";
+  discoveryTopic = "homeassistant/sensor/" + String(HA_PREFIX) + device + "-alarm-low/config";
+  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm-low\",\"name\": \"Low Alarm Setpoint (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-low\",\"unit_of_measurement\": \"°C\"}";
   publishPayload(discoveryTopic, discoveryPayload);
-  discoveryTopic = "homeassistant/sensor/px-env-" + device + "-alarm-high/config";
-  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"px-env-" + device + "-alarm-high\",\"name\": \"High Alarm Setpoint (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-high\",\"unit_of_measurement\": \"°C\"}";
+  discoveryTopic = "homeassistant/sensor/" + String(HA_PREFIX) + device + "-alarm-high/config";
+  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm-high\",\"name\": \"High Alarm Setpoint (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-high\",\"unit_of_measurement\": \"°C\"}";
   publishPayload(discoveryTopic, discoveryPayload);
 
   // Send HA discovery packet for alarm state...
-  discoveryTopic = "homeassistant/binary_sensor/px-env-" + device + "/config";
-  discoveryPayload = "{\"device_class\": \"safety\",\"unique_id\": \"px-env-" + device + "-alarm\",\"name\": \"Alarm (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\", \"payload_off\": \"0\", \"payload_on\": \"1\"}";
+  discoveryTopic = "homeassistant/binary_sensor/" + String(HA_PREFIX) + device + "/config";
+  discoveryPayload = "{\"device_class\": \"safety\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm\",\"name\": \"Alarm (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\", \"payload_off\": \"0\", \"payload_on\": \"1\"}";
   publishPayload(discoveryTopic, discoveryPayload);
 
 }
