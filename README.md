@@ -7,19 +7,19 @@ This code is designed to run on the [M5Stack Atom Lite](https://shop.m5stack.com
 
 - It is a compact device with 'production ready' design.
 - Simple to power via USB-C or 5V supply.
+- Includes USB<>RS232 chip for easy flashing.
 - Includes an RGB LED for visual status.
 - Grove connector can be used for attaching sensors.
 - [PoE power supply](https://shop.m5stack.com/products/atom-poe-kit-with-w5500-hy601742e) (with ethernet connectivity) is an option.
 
-![Grove connector with 4.7k pull-up resistor.](/images/m5stack-atom-lite.png)
+![M5Stack Atom Lite](/images/m5stack-atom-lite.png)
 
-The client device is paired with low cost DS18B20, digital thermometer with fairly precise readings (±0.5°C over much of the range) and can give up to 12 bits of precision from the onboard digital-to-analog converter. 
+The client device is paired with low cost DS18B20, digital thermometer with fairly precise readings (±0.5°C over much of the range) and can give up to 12 bits of precision from the onboard digital-to-analog converter. The DS18B20 also includes high and low alarm set-points that are stored in the internal EEPROM.
 
 The DS18B20 sensors can be attached via `GPIO 26` using the Grove connector. Once the client devices are flashed, multiple temperature probes can be attached to a device.
 
 Each DS18B20 contains a unique 64-bit address and data will be sent via the MQTT messaging platform using these addresses. Therefore a temperature probe can be attached to any client device and readings will be associated with that sensor/probe.
 
-**Note:** This project does not use the DS18B20 internal alarm function, however this could be updated and would enable alarm set-points to be stored in the sensor probe.
 
 ## Electronic / Wiring
 
@@ -44,19 +44,47 @@ The MQTT settings and prefix used for all topics is defined in ```Secrets.h``` h
 #define MQTT_PORT 1883
 #define MQTT_PREFIX "px/env/"
 ```
+For each attached sensor, the following messages will be published **on boot**:
 
-For each attached sensor, the following messages will be published:
+```
+px/env/28aaebfa1a130268/alarm-low        The sensors alarm high/max set point.
+px/env/28aaebfa1a130268/alarm-high       The sensors alarm low/min set point.
+```
+
+For each attached sensor, the following messages will be published after boot and **periodically**:
 
 ```
 px/env/28aaebfa1a130268/temp        The temperature reading.
 px/env/28aaebfa1a130268/alarm       Alarm state (1/0).
 ```
 
-
 ## Alarm Set-Point
-Each sensor can be configured with an alarm set-point. When the temperature rises above this point the alarm MQTT topic will be sent and the LED on the client device will turn RED.
+Each sensor can be configured with low and high alarm set-points. These are stored within EEPROM inside the sensor (so will operate regardless to which device the temperature probe is attached). When the temperature rises above this point the alarm MQTT topic will be updated and the LED on the client device will turn RED.
+
+The low and high setpoints can be set by sending an MQTT payload to the following topics:
 
 ```
-px/env/28aaebfa1a130268/set         Sets the alarm (max) set-point.
+px/env/28aaebfa1a130268/set-low         Sets the alarm low(min) set-point.
+px/env/28aaebfa1a130268/set-high        Sets the alarm high(max) set-point.
 ```
-**Note:** Set-points are *not* stored on the client devices, however can be set at startup via MQTT using retained messages. The required set-point for each sensor address should be sent to the MQTT broker with a `retain=true` flag resulting in the client  devices receiving this message immediately at startup. These retained messages should be sent periodically (e.g. every 300 seconds) in case the MQTT broker restarts (unless persistent storage is configured).
+**Note:** Set-points are stored within the probe devices, but could be periodically set via MQTT to ensure they are operating at the desired levels. The required set-points for each sensor address should be sent to the MQTT broker with a `retain=true` flag resulting in the client devices receiving this message immediately at startup. Set-points will only be written to EEPROM when changed, to avoid read/write wear.
+
+## Home Assistant Integration
+
+The devices can be configured to automatically configure entities in Home Assistant for displaying the live temperature, alarm state and set-points. Each probe will create 4 entities:
+
+![Home Assistant discovery entities.](/images/homeassistant.png)
+
+The discovery option must be enabled in the configuration...
+```
+#define HA_DISCOVERY true
+#define HA_PREFIX "px-env-"
+```
+
+The following discovery payloads will be sent on boot...
+```
+homeassistant/sensor/px-env-28aaebfa1a130268/config
+homeassistant/sensor/px-env-28aaebfa1a130268-alarm-low/config
+homeassistant/sensor/px-env-28aaebfa1a130268-alarm-high/config
+homeassistant/binary_sensor/px-env-28aaebfa1a130268/config
+```

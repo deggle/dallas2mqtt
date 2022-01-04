@@ -6,3 +6,4 @@
 #define MQTT_PREFIX "px/env/"
 
 #define HA_DISCOVERY true
+#define HA_PREFIX "px-env-"
