@@ -1,4 +1,4 @@
-#include <WiFi.h>
+ #include <WiFi.h>
 #include <Secrets.h>
 #include <AsyncMqttClient.h>
 #include <OneWire.h>
@@ -33,8 +33,7 @@ unsigned long previousMillis = 0;   // Stores last time temperature was publishe
 const long interval = 10000;        // Interval at which to publish sensor readings.
 DeviceAddress tempDeviceAddress;    // Holds current address while looping.
 String deviceAddresses[MAX_SENSORS];// Stores string addresses for devices.
-int alarmTemp[MAX_SENSORS];         // Store alarm temp for each device.
-bool alarmState = false;            // Hold the current alarm state.
+bool alarmState = false;            // Hold the current (global) alarm state.
 
 void connectToWifi() {
   Serial.println("[WiFi  ] Connecting to Wi-Fi...");
@@ -72,6 +71,9 @@ void onMqttConnect(bool sessionPresent) {
   // Search for devices...
   searchDevices();
 
+  // Let's go right for a reading...
+  readSensors();
+
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -101,22 +103,62 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   Serial.print(String(payload));
   Serial.println(".");
 
-  // Is this an alarm set point?
-  if (String(topic).endsWith("/set")) {
+  // Is this a low/high alarm set point?
+  if (String(topic).endsWith("/set-low")) {
 
     // Get the address of the device to set...
     String deviceAddress = String(topic);
     deviceAddress.replace(MQTT_PREFIX, "");
-    deviceAddress.replace("/set","");
+    deviceAddress.replace("/set-low","");
     deviceAddress.toLowerCase();
-    Serial.println("[Sensor] Setting alarm setpoint for device " + deviceAddress + ".");
 
-    // Which ID is this device...
-    int deviceIndex = deviceAddresses->indexOf(deviceAddress);
-    alarmTemp[deviceIndex] = String(payload).toInt();
-    Serial.println("[Sensor] Alarm setpoint for device " + deviceAddress + " (ID=" + deviceIndex + ") set to " + alarmTemp[deviceIndex] + ".");
+    Serial.println("[Sensor] Setting low alarm setpoint for device " + deviceAddress + " to " + String(payload) + " C.");
+
+    setAlarmTemp(true, deviceAddress, String(payload).toInt());
+    
+    Serial.println("[Sensor] Low alarm setpoint for device " + deviceAddress + " set to " +  String(payload).toInt() + ".");
   
+  } else if (String(topic).endsWith("/set-high")) {
+
+    // Get the address of the device to set...
+    String deviceAddress = String(topic);
+    deviceAddress.replace(MQTT_PREFIX, "");
+    deviceAddress.replace("/set-high","");
+    deviceAddress.toLowerCase();
+
+    Serial.println("[Sensor] Setting high alarm setpoint for device " + deviceAddress + " to " + String(payload) + " C.");
+
+    setAlarmTemp(false, deviceAddress, String(payload).toInt());
+
+    Serial.println("[Sensor] High alarm setpoint for device " + deviceAddress + " set to " +  String(payload).toInt() + ".");
+    
   }
+
+}
+
+void setAlarmTemp(bool isLow, String deviceAddress, int8_t temp) {
+
+    // Loop through each device and print out temperature data...
+    for(int i=0;i<numberOfDevices; i++)
+    {
+
+      // Search the wire for the address...
+      if(sensors.getAddress(tempDeviceAddress, i))
+      {
+
+        // Check for mismatch, and re-boot if needed...
+        String strAddress = addressToString(tempDeviceAddress);
+        if (strAddress != deviceAddresses[i]) { ESP.restart(); }
+
+        if (isLow) {
+          sensors.setLowAlarmTemp(tempDeviceAddress, temp);
+        } else {
+          sensors.setHighAlarmTemp(tempDeviceAddress, temp);
+        }
+
+      }
+
+    }
 
 }
 
@@ -162,17 +204,17 @@ void searchDevices() {
       Serial.println();
 
       // Subscribing to alarm set temp...
-      String topic = MQTT_PREFIX + deviceAddresses[i] + "/set";
-      Serial.print("[MQTT  ] Subscribing to ");
-      Serial.print(topic.c_str());
-      Serial.println("."); 
-
-      mqttClient.subscribe(topic.c_str(), 2);
+      mqttSubscribe(MQTT_PREFIX + deviceAddresses[i] + "/set-low");
+      mqttSubscribe(MQTT_PREFIX + deviceAddresses[i] + "/set-high");
 
       // Send the HA discovery packet if desired...
       if (HA_DISCOVERY) {
         publishDiscovery(deviceAddresses[i]);
       }
+
+      // Publish alarm states...
+      publishPayload(MQTT_PREFIX + deviceAddresses[i] + "/alarm-low", String(sensors.getLowAlarmTemp(tempDeviceAddress)));
+      publishPayload(MQTT_PREFIX + deviceAddresses[i] + "/alarm-high", String(sensors.getHighAlarmTemp(tempDeviceAddress)));
 
     }else{
       Serial.print("[Sensor] Found ghost device at ");
@@ -186,7 +228,6 @@ void searchDevices() {
 void resetArrays() {
   for(int i = 0; i < MAX_SENSORS; i++) {
     deviceAddresses[i] = "";
-    alarmTemp[i] = -99;
   }
 }
 
@@ -199,7 +240,7 @@ void setLED(uint8_t nr, uint8_t ng, uint8_t nb) {
     if (alarmState) {
       nr = 255;
     } else {
-      nb = 50;
+      ng = 50;
     }
 
   }
@@ -260,7 +301,7 @@ void loop() {
 
 void readSensors() {
 
-  setLED(0,50,0);
+  setLED(0,0,50);
 
   Serial.println("[Sensor] Requesting temperatures...");
   sensors.requestTemperatures();
@@ -295,7 +336,9 @@ void readSensors() {
         Serial.println("[Sensor] Temperature for device " + strAddress + " is " + tempC + " C.");
         
         // Check the alarm...
-        bool isAlarming = tempC > alarmTemp[i];
+        bool isAlarming = sensors.hasAlarm(tempDeviceAddress);
+
+        // Set the global alarm state (for the LED)...
         alarmState = alarmState | isAlarming;
 
         // Publish an MQTT message...
@@ -313,6 +356,13 @@ void readSensors() {
 
 }
 
+void mqttSubscribe(String topic) {
+      Serial.print("[MQTT  ] Subscribing to ");
+      Serial.print(topic.c_str());
+      Serial.println(".");
+      mqttClient.subscribe(topic.c_str(), 2);
+}
+
 void publishPayload(String topic, String payload) {
     uint16_t packetIdPub = mqttClient.publish(topic.c_str(), 1, true, payload.c_str());
     Serial.print("[MQTT  ] Publishing on topic " + topic + ", payload " + payload + ", packet ID=" + String(packetIdPub) + ".\n");
@@ -325,9 +375,17 @@ void publishDiscovery(String device) {
   String discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"px-env-" + device + "-temp\",\"name\": \"Temperature (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/temp\",\"unit_of_measurement\": \"°C\",\"value_template\": \"{{ value | round(1) }}\"}";
   publishPayload(discoveryTopic, discoveryPayload);
 
+  // Send HA discovery packet for alarm setpoints...
+  discoveryTopic = "homeassistant/sensor/px-env-" + device + "-alarm-low/config";
+  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"px-env-" + device + "-alarm-low\",\"name\": \"Low Alarm Setpoint (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-low\",\"unit_of_measurement\": \"°C\"}";
+  publishPayload(discoveryTopic, discoveryPayload);
+  discoveryTopic = "homeassistant/sensor/px-env-" + device + "-alarm-high/config";
+  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"px-env-" + device + "-alarm-high\",\"name\": \"High Alarm Setpoint (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-high\",\"unit_of_measurement\": \"°C\"}";
+  publishPayload(discoveryTopic, discoveryPayload);
+
   // Send HA discovery packet for alarm state...
   discoveryTopic = "homeassistant/binary_sensor/px-env-" + device + "/config";
-  discoveryPayload = "{\"device_class\": \"safety\",\"unique_id\": \"px-env-" + device + "-alarm\",\"name\": \"Alarm (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\"}";
+  discoveryPayload = "{\"device_class\": \"safety\",\"unique_id\": \"px-env-" + device + "-alarm\",\"name\": \"Alarm (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\", \"payload_off\": \"0\", \"payload_on\": \"1\"}";
   publishPayload(discoveryTopic, discoveryPayload);
 
 }
