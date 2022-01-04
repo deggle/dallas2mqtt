@@ -33,6 +33,7 @@ Where multiple sensors are to be connected to a single client device, there shou
 
 > To avoid over-complication, and risk electronic issues, it may be better to wire specific sensor bundles (e.g. three sensors into one Grove connector, with one pull-up resistor) as required.
 
+
 ## MQTT Topics
 
 All topics are based on the ID of the attached DS18B20 devices, allowing sensor traceability. This also allows sensors to be moved from one client device to another, without any configuration required (power cycle, or long-press the button to re-scan attached devices).
