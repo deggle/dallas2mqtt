@@ -1,4 +1,4 @@
-# ESP32-Environmental
+# Preventx Environmental Monitoring
 
 Laboratory environmental monitoring project for Preventx.
 
@@ -61,17 +61,17 @@ px/env/28aaebfa1a130268/alarm       Alarm state (1/0).
 ## Alarm Set-Point
 Each sensor can be configured with low and high alarm set-points. These are stored within EEPROM inside the sensor (so will operate regardless to which device the temperature probe is attached). When the temperature rises above this point the alarm MQTT topic will be updated and the LED on the client device will turn RED.
 
-The low and high setpoints can be set by sending an MQTT payload to the following topics:
+The low and high set-points can be set by sending an MQTT payload to the following topics:
 
 ```
 px/env/28aaebfa1a130268/set-low         Sets the alarm low(min) set-point.
 px/env/28aaebfa1a130268/set-high        Sets the alarm high(max) set-point.
 ```
-**Note:** Set-points are stored within the probe devices, but could be periodically set via MQTT to ensure they are operating at the desired levels. The required set-points for each sensor address should be sent to the MQTT broker with a `retain=true` flag resulting in the client devices receiving this message immediately at startup. Set-points will only be written to EEPROM when changed, to avoid read/write wear.
+**Note:** Set-points are stored within the probe devices, but could be periodically set via MQTT to ensure they are operating at the desired levels. The required set-points for each sensor address could be sent to the MQTT broker with a `retain=true` flag resulting in the client devices receiving this message immediately at startup. Set-points will only be written to EEPROM when changed, to avoid read/write wear.
 
 ## Home Assistant Integration
 
-The devices can be configured to automatically configure entities in Home Assistant for displaying the live temperature, alarm state and set-points. Each probe will create 4 entities:
+The devices can be configured to automatically setup entities in Home Assistant for displaying the live temperature, alarm state and set-points. Each probe will create 4 entities that can be included on dashboards:
 
 ![Home Assistant discovery entities.](/images/homeassistant.png)
 
@@ -84,7 +84,11 @@ The discovery option must be enabled in the configuration...
 The following discovery payloads will be sent on boot...
 ```
 homeassistant/sensor/px-env-28aaebfa1a130268/config
+homeassistant/binary_sensor/px-env-28aaebfa1a130268/config
 homeassistant/sensor/px-env-28aaebfa1a130268-alarm-low/config
 homeassistant/sensor/px-env-28aaebfa1a130268-alarm-high/config
-homeassistant/binary_sensor/px-env-28aaebfa1a130268/config
 ```
+
+## Development Roadmap
+
+Add support for the W5500 ethernet chip, as used in the [M5Stack PoE add-on](https://shop.m5stack.com/products/atom-poe-kit-with-w5500-hy601742e). This will provide power 'out of the box' but it's daft to use PoE and then send data over WiFi. Coding to use ethernet (or fall back to WiFi) would improve stability and ease power distribution.
