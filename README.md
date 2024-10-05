@@ -1,6 +1,6 @@
 # Dallas2MQTT Environmental Monitoring
 
-Laboratory environmental monitoring project for Islestone.
+A project to interface one or more Dallas DS18B20 sensors to automation systems using MQTT.
 
 ## Hardware
 This code is designed to run on the [M5Stack Atom Lite](https://shop.m5stack.com/collections/atom-series/products/atom-lite-esp32-development-kit) device, a development microprocessor board based on the ESP32 chipset. This device has been selected for the following reasons:
@@ -15,6 +15,8 @@ This code is designed to run on the [M5Stack Atom Lite](https://shop.m5stack.com
 ![M5Stack Atom Lite](/images/m5stack-atom-lite.png)
 
 The client device is paired with low cost DS18B20, digital thermometer with fairly precise readings (±0.5°C over much of the range) and can give up to 12 bits of precision from the onboard digital-to-analog converter. The DS18B20 also includes high and low alarm set-points that are stored in the internal EEPROM.
+
+![DS18B20](/images/ds18b20.png)
 
 The DS18B20 sensors can be attached via `GPIO 26` using the Grove connector. Once the client devices are flashed, multiple temperature probes can be attached to a device.
 
