@@ -1,5 +1,5 @@
 #include "dallas2mqtt.h"
-#include "Secrets.h"
+#include "secrets.h"
 
 CRGB ledAtom[1];                      // FastLED array for 1 LED
 Button2 button;                       // Button object

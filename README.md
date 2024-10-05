@@ -18,7 +18,7 @@ The client device is paired with low cost DS18B20, digital thermometer with fair
 
 The DS18B20 sensors can be attached via `GPIO 26` using the Grove connector. Once the client devices are flashed, multiple temperature probes can be attached to a device.
 
-Each DS18B20 contains a unique 64-bit address and data will be sent via the MQTT messaging platform using these addresses. Therefore a temperature probe can be attached to any client device and readings will be associated with that sensor/probe.
+Each DS18B20 contains a unique 64-bit address and data will be sent via the MQTT messaging platform using these addresses. Therefore a temperature probe can be attached to any client device and readings will be associated with that sensor/probe. This is likely helpful for tacking probes though calibration processes.
 
 
 ## Electronic / Wiring
