@@ -1,39 +1,21 @@
-#include <WiFi.h>
-#include <Secrets.h>
-#include <AsyncMqttClient.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include <Button2.h>
+#include "dallas2mqtt.h"
+#include "Secrets.h"
 
-#define FASTLED_INTERNAL
-#include <FastLED.h> 
+CRGB ledAtom[1];                      // FastLED array for 1 LED
+Button2 button;                       // Button object
+OneWire oneWire(ONE_WIRE_BUS);        // OneWire instance on the specified pin
+DallasTemperature sensors(&oneWire);  // DallasTemperature instance
 
-extern "C" {
-  #include "freertos/FreeRTOS.h"
-  #include "freertos/timers.h"
-}
+AsyncMqttClient mqttClient;           // MQTT client instance
+TimerHandle_t mqttReconnectTimer;     // Timer for MQTT reconnect
+TimerHandle_t wifiReconnectTimer;     // Timer for Wi-Fi reconnect
 
-#define MAX_SENSORS 10
-#define ONE_WIRE_BUS 26
-#define TEMPERATURE_PRECISION 12
-#define PIN_LEDATOM 27
-#define BUTTON_PIN 39
-
-CRGB ledAtom[1];
-Button2 button;
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
-
-AsyncMqttClient mqttClient;
-TimerHandle_t mqttReconnectTimer;
-TimerHandle_t wifiReconnectTimer;
-
-int numberOfDevices;                // Number of devices found at boot time.
-unsigned long previousMillis = 0;   // Stores last time temperature was published.
-const long interval = 10000;        // Interval at which to publish sensor readings.
-DeviceAddress tempDeviceAddress;    // Holds current address while looping.
-String deviceAddresses[MAX_SENSORS];// Stores string addresses for devices.
-bool alarmState = false;            // Hold the current (global) alarm state.
+int numberOfDevices;                  // Number of DS18B20 sensors found
+unsigned long previousMillis = 0;     // Used for timing sensor reads
+const long interval = 10000;          // Publish interval for sensor readings
+DeviceAddress tempDeviceAddress;      // Address for current DS18B20 sensor
+String deviceAddresses[MAX_SENSORS];  // Array to store sensor addresses
+bool alarmState = false;              // Global alarm state
 
 void connectToWifi() {
   Serial.println("[WiFi  ] Connecting to Wi-Fi...");

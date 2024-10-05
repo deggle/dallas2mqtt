@@ -7,5 +7,12 @@
         "tuple": "cpp",
         "type_traits": "cpp",
         "utility": "cpp"
-    }
+    },
+    "cSpell.words": [
+        "CRGB",
+        "FASTLED",
+        "LEDATOM",
+        "Mqtt",
+        "setpoint"
+    ]
 }
