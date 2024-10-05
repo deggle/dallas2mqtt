@@ -1,6 +1,6 @@
-# Preventx Environmental Monitoring
+# Dallas2MQTT Environmental Monitoring
 
-Laboratory environmental monitoring project for Preventx.
+Laboratory environmental monitoring project for Islestone.
 
 ## Hardware
 This code is designed to run on the [M5Stack Atom Lite](https://shop.m5stack.com/collections/atom-series/products/atom-lite-esp32-development-kit) device, a development microprocessor board based on the ESP32 chipset. This device has been selected for the following reasons:
@@ -43,20 +43,20 @@ The MQTT settings and prefix used for all topics is defined in ```Secrets.h``` h
 ```c
 #define MQTT_HOST "IP or Host Name"
 #define MQTT_PORT 1883
-#define MQTT_PREFIX "px/env/"
+#define MQTT_PREFIX "is/env/"
 ```
 For each attached sensor, the following messages will be published **on boot**:
 
 ```
-px/env/28aaebfa1a130268/alarm-low        The sensors alarm high/max set point.
-px/env/28aaebfa1a130268/alarm-high       The sensors alarm low/min set point.
+is/env/28aaebfa1a130268/alarm-low        The sensors alarm high/max set point.
+is/env/28aaebfa1a130268/alarm-high       The sensors alarm low/min set point.
 ```
 
 For each attached sensor, the following messages will be published after boot and **periodically**:
 
 ```
-px/env/28aaebfa1a130268/temp        The temperature reading.
-px/env/28aaebfa1a130268/alarm       Alarm state (1/0).
+is/env/28aaebfa1a130268/temp        The temperature reading.
+is/env/28aaebfa1a130268/alarm       Alarm state (1/0).
 ```
 
 ## Alarm Set-Point
@@ -65,8 +65,8 @@ Each sensor can be configured with low and high alarm set-points. These are stor
 The low and high set-points can be set by sending an MQTT payload to the following topics:
 
 ```
-px/env/28aaebfa1a130268/set-low         Sets the alarm low(min) set-point.
-px/env/28aaebfa1a130268/set-high        Sets the alarm high(max) set-point.
+is/env/28aaebfa1a130268/set-low         Sets the alarm low(min) set-point.
+is/env/28aaebfa1a130268/set-high        Sets the alarm high(max) set-point.
 ```
 **Note:** Set-points are stored within the probe devices, but could be periodically set via MQTT to ensure they are operating at the desired levels. The required set-points for each sensor address could be sent to the MQTT broker with a `retain=true` flag resulting in the client devices receiving this message immediately at startup. Set-points will only be written to EEPROM when changed, to avoid read/write wear.
 
@@ -79,17 +79,19 @@ The devices can be configured to automatically setup entities in Home Assistant 
 The discovery option must be enabled in the configuration...
 ```
 #define HA_DISCOVERY true
-#define HA_PREFIX "px-env-"
+#define HA_PREFIX "is-env-"
 ```
 
 The following discovery payloads will be sent on boot...
 ```
-homeassistant/sensor/px-env-28aaebfa1a130268/config
-homeassistant/binary_sensor/px-env-28aaebfa1a130268/config
-homeassistant/sensor/px-env-28aaebfa1a130268-alarm-low/config
-homeassistant/sensor/px-env-28aaebfa1a130268-alarm-high/config
+homeassistant/sensor/is-env-28aaebfa1a130268/config
+homeassistant/binary_sensor/is-env-28aaebfa1a130268/config
+homeassistant/sensor/is-env-28aaebfa1a130268-alarm-low/config
+homeassistant/sensor/is-env-28aaebfa1a130268-alarm-high/config
 ```
 
 ## Development Roadmap
 
 Add support for the W5500 ethernet chip, as used in the [M5Stack PoE add-on](https://shop.m5stack.com/products/atom-poe-kit-with-w5500-hy601742e). This will provide power 'out of the box' but it's daft to use PoE and then send data over WiFi. Coding to use ethernet (or fall back to WiFi) would improve stability and ease power distribution.
+
+Copyright © Tim Alston
