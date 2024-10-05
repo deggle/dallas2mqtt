@@ -43,20 +43,20 @@ The MQTT settings and prefix used for all topics is defined in ```Secrets.h``` h
 ```c
 #define MQTT_HOST "IP or Host Name"
 #define MQTT_PORT 1883
-#define MQTT_PREFIX "is/env/"
+#define MQTT_PREFIX "prefix/env/"
 ```
 For each attached sensor, the following messages will be published **on boot**:
 
 ```
-is/env/28aaebfa1a130268/alarm-low        The sensors alarm high/max set point.
-is/env/28aaebfa1a130268/alarm-high       The sensors alarm low/min set point.
+prefix/env/28aaebfa1a130268/alarm-low        The sensors alarm high/max set point.
+prefix/env/28aaebfa1a130268/alarm-high       The sensors alarm low/min set point.
 ```
 
 For each attached sensor, the following messages will be published after boot and **periodically**:
 
 ```
-is/env/28aaebfa1a130268/temp        The temperature reading.
-is/env/28aaebfa1a130268/alarm       Alarm state (1/0).
+prefix/env/28aaebfa1a130268/temp        The temperature reading.
+prefix/env/28aaebfa1a130268/alarm       Alarm state (1/0).
 ```
 
 ## Alarm Set-Point
@@ -65,8 +65,8 @@ Each sensor can be configured with low and high alarm set-points. These are stor
 The low and high set-points can be set by sending an MQTT payload to the following topics:
 
 ```
-is/env/28aaebfa1a130268/set-low         Sets the alarm low(min) set-point.
-is/env/28aaebfa1a130268/set-high        Sets the alarm high(max) set-point.
+prefix/env/28aaebfa1a130268/set-low         Sets the alarm low(min) set-point.
+prefix/env/28aaebfa1a130268/set-high        Sets the alarm high(max) set-point.
 ```
 **Note:** Set-points are stored within the probe devices, but could be periodically set via MQTT to ensure they are operating at the desired levels. The required set-points for each sensor address could be sent to the MQTT broker with a `retain=true` flag resulting in the client devices receiving this message immediately at startup. Set-points will only be written to EEPROM when changed, to avoid read/write wear.
 
@@ -79,15 +79,15 @@ The devices can be configured to automatically setup entities in Home Assistant 
 The discovery option must be enabled in the configuration...
 ```
 #define HA_DISCOVERY true
-#define HA_PREFIX "is-env-"
+#define HA_PREFIX "prefix-env-"
 ```
 
 The following discovery payloads will be sent on boot...
 ```
-homeassistant/sensor/is-env-28aaebfa1a130268/config
-homeassistant/binary_sensor/is-env-28aaebfa1a130268/config
-homeassistant/sensor/is-env-28aaebfa1a130268-alarm-low/config
-homeassistant/sensor/is-env-28aaebfa1a130268-alarm-high/config
+homeassistant/sensor/prefix-env-28aaebfa1a130268/config
+homeassistant/binary_sensor/prefix-env-28aaebfa1a130268/config
+homeassistant/sensor/prefix-env-28aaebfa1a130268-alarm-low/config
+homeassistant/sensor/prefix-env-28aaebfa1a130268-alarm-high/config
 ```
 
 ## Development Roadmap
