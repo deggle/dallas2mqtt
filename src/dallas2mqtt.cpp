@@ -379,7 +379,7 @@ void publishDiscovery(String device) {
 
   // Send HA discovery packet for alarm state...
   discoveryTopic = "homeassistant/binary_sensor/" + String(HA_PREFIX) + device + "/config";
-  discoveryPayload = "{\"device_class\": \"safety\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm\",\"name\": \"Alarm\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\", \"payload_off\": \"0\", \"payload_on\": \"1\", \"device\":" + deviceInfo + "}";
+  discoveryPayload = "{\"device_class\": \"problem\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm\",\"name\": \"Alarm\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\", \"payload_off\": \"0\", \"payload_on\": \"1\", \"device\":" + deviceInfo + "}";
   publishPayload(discoveryTopic, discoveryPayload);
 
   // Send HA discovery packet for setpoint inputs (low setpoint, 0 decimal places)...
