@@ -11,23 +11,22 @@
   #define DEBUG_PRINTLN(...)
 #endif
 
-const long interval = 30000;          // Publish interval for sensor readings
-const bool debug = true;
+const long interval = 30000;                // Publish interval for sensor readings
 
-CRGB ledAtom[1];                      // FastLED array for 1 LED
-Button2 button;                       // Button object
-OneWire oneWire(ONE_WIRE_BUS);        // OneWire instance on the specified pin
-DallasTemperature sensors(&oneWire);  // DallasTemperature instance
+CRGB ledAtom[1];                            // FastLED array for 1 LED
+Button2 button;                             // Button object
+OneWire oneWire(ONE_WIRE_BUS);              // OneWire instance on the specified pin
+DallasTemperature sensors(&oneWire);        // DallasTemperature instance
 
-AsyncMqttClient mqttClient;           // MQTT client instance
-TimerHandle_t mqttReconnectTimer;     // Timer for MQTT reconnect
-TimerHandle_t wifiReconnectTimer;     // Timer for Wi-Fi reconnect
+AsyncMqttClient mqttClient;                 // MQTT client instance
+TimerHandle_t mqttReconnectTimer;           // Timer for MQTT reconnect
+TimerHandle_t wifiReconnectTimer;           // Timer for Wi-Fi reconnect
 
-int numberOfDevices;                  // Number of DS18B20 sensors found
-unsigned long previousMillis = 0;     // Used for timing sensor reads
-DeviceAddress deviceAddresses[MAX_SENSORS];  // Array to store sensor addresses
-String deviceAddressStrings[MAX_SENSORS];  // Array to store sensor addresses as strings
-bool alarmState = false;              // Global alarm state
+int numberOfDevices;                        // Number of DS18B20 sensors found
+unsigned long previousMillis = 0;           // Used for timing sensor reads
+DeviceAddress deviceAddresses[MAX_SENSORS]; // Array to store sensor addresses
+String deviceAddressStrings[MAX_SENSORS];   // Array to store sensor addresses as strings
+bool alarmState = false;                    // Global alarm state
 
 void connectToWifi() {
   DEBUG_PRINTLN("[WiFi  ] Connecting to Wi-Fi...");
