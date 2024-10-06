@@ -262,7 +262,7 @@ void setup() {
   mqttClient.onSubscribe(onMqttSubscribe);
   mqttClient.onMessage(onMqttMessage);
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
-  //mqttClient.setCredentials("USER", "PASS");
+  mqttClient.setCredentials(MQTT_USERNAME, MQTT_PASSWORD);
 
   WiFi.onEvent(WiFiEvent);
   connectToWifi();
