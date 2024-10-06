@@ -43,5 +43,6 @@ String addressToString(DeviceAddress deviceAddress);
 void click(Button2& btn);
 void longClickDetected(Button2& btn);
 void doubleClick(Button2& btn);
+bool stringToDeviceAddress(const String &addressString, DeviceAddress &deviceAddress);
 
 #endif // DALLAS2MQTT_H

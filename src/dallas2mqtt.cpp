@@ -1,7 +1,18 @@
 #include "dallas2mqtt.h"
 #include "secrets.h"
 
+#define DEBUG 1  // Set to 1 to enable debugging, or 0 to disable
+
+#ifdef DEBUG
+  #define DEBUG_PRINT(...)  Serial.print(__VA_ARGS__)
+  #define DEBUG_PRINTLN(...)  Serial.println(__VA_ARGS__)
+#else
+  #define DEBUG_PRINT(...)
+  #define DEBUG_PRINTLN(...)
+#endif
+
 const long interval = 30000;          // Publish interval for sensor readings
+const bool debug = true;
 
 CRGB ledAtom[1];                      // FastLED array for 1 LED
 Button2 button;                       // Button object
@@ -14,30 +25,30 @@ TimerHandle_t wifiReconnectTimer;     // Timer for Wi-Fi reconnect
 
 int numberOfDevices;                  // Number of DS18B20 sensors found
 unsigned long previousMillis = 0;     // Used for timing sensor reads
-DeviceAddress tempDeviceAddress;      // Address for current DS18B20 sensor
-String deviceAddresses[MAX_SENSORS];  // Array to store sensor addresses
+DeviceAddress deviceAddresses[MAX_SENSORS];  // Array to store sensor addresses
+String deviceAddressStrings[MAX_SENSORS];  // Array to store sensor addresses as strings
 bool alarmState = false;              // Global alarm state
 
 void connectToWifi() {
-  Serial.println("[WiFi  ] Connecting to Wi-Fi...");
+  DEBUG_PRINTLN("[WiFi  ] Connecting to Wi-Fi...");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 }
 
 void connectToMqtt() {
-  Serial.println("[MQTT  ] Connecting to MQTT...");
+  DEBUG_PRINTLN("[MQTT  ] Connecting to MQTT...");
   mqttClient.connect();
 }
 
 void WiFiEvent(WiFiEvent_t event) {
   switch(event) {
     case SYSTEM_EVENT_STA_GOT_IP:
-      Serial.println("[WiFi  ] Wi-Fi connected.");
-      Serial.print("[WiFi  ] IP address: ");
-      Serial.println(WiFi.localIP());
+      DEBUG_PRINTLN("[WiFi  ] Wi-Fi connected.");
+      DEBUG_PRINT("[WiFi  ] IP address: ");
+      DEBUG_PRINTLN(WiFi.localIP());
       connectToMqtt();
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
-      Serial.println("[WiFi  ] Wi-Fi connection lost.");
+      DEBUG_PRINTLN("[WiFi  ] Wi-Fi connection lost.");
       setLED(255,0,0);
       xTimerStop(mqttReconnectTimer, 0); // Avoid reconnecting to MQTT while Wi-Fi is down.
       xTimerStart(wifiReconnectTimer, 0);
@@ -48,8 +59,8 @@ void WiFiEvent(WiFiEvent_t event) {
 }
 
 void onMqttConnect(bool sessionPresent) {
-  Serial.print("[MQTT  ] Connected to MQTT, Client ID: ");
-  Serial.println(mqttClient.getClientId());
+  DEBUG_PRINT("[MQTT  ] Connected to MQTT, Client ID: ");
+  DEBUG_PRINTLN(mqttClient.getClientId());
 
   // Search for devices...
   searchDevices();
@@ -60,7 +71,7 @@ void onMqttConnect(bool sessionPresent) {
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Serial.println("[MQTT  ] Disconnected from MQTT.");
+  DEBUG_PRINTLN("[MQTT  ] Disconnected from MQTT.");
   setLED(255,0,0);
   if (WiFi.isConnected()) {
     xTimerStart(mqttReconnectTimer, 0);
@@ -68,23 +79,23 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
 }
 
 void onMqttPublish(uint16_t packetId) {
-  Serial.print("[MQTT  ] Publish acknowledged, packet ID=" + String(packetId) + ".\n");
+  DEBUG_PRINT("[MQTT  ] Publish acknowledged, packet ID=" + String(packetId) + ".\n");
 }
 
 void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
-  Serial.print("[MQTT  ] Subscribe acknowledged, packet ID=");
-  Serial.print(packetId);
-  Serial.print(", QoS ");
-  Serial.print(qos);
-  Serial.println(".");
+  DEBUG_PRINT("[MQTT  ] Subscribe acknowledged, packet ID=");
+  DEBUG_PRINT(packetId);
+  DEBUG_PRINT(", QoS ");
+  DEBUG_PRINT(qos);
+  DEBUG_PRINTLN(".");
 }
 
 void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
-  Serial.print("[MQTT  ] Message received on topic ");
-  Serial.print(topic);
-  Serial.print(", payload ");
-  Serial.print(String(payload));
-  Serial.println(".");
+  DEBUG_PRINT("[MQTT  ] Message received on topic ");
+  DEBUG_PRINT(topic);
+  DEBUG_PRINT(", payload ");
+  DEBUG_PRINT(String(payload));
+  DEBUG_PRINTLN(".");
 
   // Is this a low/high alarm set point?
   if (String(topic).endsWith("/set-low")) {
@@ -97,9 +108,9 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 
     // Convert payload to int once and store it in a variable for reuse
     int lowSetpoint = String(payload).toInt();
-    Serial.println("[Sensor] Setting low alarm setpoint for device " + deviceAddress + " to " + String(lowSetpoint) + " °C.");
+    DEBUG_PRINTLN("[Sensor] Setting low alarm setpoint for device " + deviceAddress + " to " + String(lowSetpoint) + " °C.");
     setAlarmTemp(true, deviceAddress, lowSetpoint);
-    Serial.println("[Sensor] Low alarm setpoint for device " + deviceAddress + " successfully set to " + String(lowSetpoint) + " °C.");
+    DEBUG_PRINTLN("[Sensor] Low alarm setpoint for device " + deviceAddress + " successfully set to " + String(lowSetpoint) + " °C.");
 
   } else if (String(topic).endsWith("/set-high")) {
 
@@ -111,36 +122,34 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 
     // Convert payload to int once and store it in a variable for reuse
     int highSetpoint = String(payload).toInt();
-    Serial.println("[Sensor] Setting high alarm setpoint for device " + deviceAddress + " to " + String(highSetpoint) + " °C.");
+    DEBUG_PRINTLN("[Sensor] Setting high alarm setpoint for device " + deviceAddress + " to " + String(highSetpoint) + " °C.");
     setAlarmTemp(false, deviceAddress, highSetpoint);
-    Serial.println("[Sensor] High alarm setpoint for device " + deviceAddress + " successfully set to " + String(highSetpoint) + " °C.");
+    DEBUG_PRINTLN("[Sensor] High alarm setpoint for device " + deviceAddress + " successfully set to " + String(highSetpoint) + " °C.");
     
   }
 
 }
 
-void setAlarmTemp(bool isLow, String deviceAddress, int8_t temp) {
+void setAlarmTemp(bool isLow, String deviceAddressString, int8_t temp) {
+    // Create a DeviceAddress array to store the converted address
+    DeviceAddress deviceAddress;
 
-    // Loop through each device on the bus...
-    for(int i=0;i<numberOfDevices; i++)
-    {
+    // Convert the string representation to a DeviceAddress (byte array)
+    if (!stringToDeviceAddress(deviceAddressString, deviceAddress)) {
+        // Handle invalid address format
+        DEBUG_PRINTLN("[Error] Invalid device address string: " + deviceAddressString);
+        return;  // Exit the function if conversion fails
+    }
 
-      // Search the wire for the address...
-      if(sensors.getAddress(tempDeviceAddress, i))
-      {
-
-        // Check for mismatch, and re-boot if needed...
-        String strAddress = addressToString(tempDeviceAddress);
-        if (strAddress != deviceAddresses[i]) { ESP.restart(); }
-
-        if (isLow) {
-          sensors.setLowAlarmTemp(tempDeviceAddress, temp);
-        } else {
-          sensors.setHighAlarmTemp(tempDeviceAddress, temp);
-        }
-
-      }
-
+    // Set the appropriate alarm temperature (low or high)
+    if (isLow) {
+        sensors.setLowAlarmTemp(deviceAddress, temp);
+        DEBUG_PRINTLN("[Sensor] Low alarm set for device: " + deviceAddressString + " at " + String(temp) + " °C.");
+        publishPayload(MQTT_PREFIX + deviceAddressString + "/alarm-low", String(sensors.getLowAlarmTemp(deviceAddress)));
+    } else {
+        sensors.setHighAlarmTemp(deviceAddress, temp);
+        DEBUG_PRINTLN("[Sensor] High alarm set for device: " + deviceAddressString + " at " + String(temp) + " °C.");
+        publishPayload(MQTT_PREFIX + deviceAddressString + "/alarm-high", String(sensors.getHighAlarmTemp(deviceAddress)));
     }
 
 }
@@ -148,9 +157,9 @@ void setAlarmTemp(bool isLow, String deviceAddress, int8_t temp) {
 void searchDevices() {
 
   // Reset arrays...
-  resetArrays();
+ // resetArrays();
 
-  Serial.println("[Sensor] Searching for 1-wire devices...");
+  DEBUG_PRINTLN("[Sensor] Searching for 1-wire devices...");
 
   // Grab a count of devices on the wire
   sensors.begin();
@@ -159,60 +168,66 @@ void searchDevices() {
   numberOfDevices = sensors.getDeviceCount();
   int numberOfDS18 = sensors.getDS18Count();
 
-  Serial.print("[Sensor] Found ");
-  Serial.print(numberOfDevices, DEC);
-  Serial.print(" devices (of which ");
-  Serial.print(numberOfDS18, DEC);
-  Serial.println(" are DS18).");
+  DEBUG_PRINT("[Sensor] Found ");
+  DEBUG_PRINT(numberOfDevices, DEC);
+  DEBUG_PRINT(" devices (of which ");
+  DEBUG_PRINT(numberOfDS18, DEC);
+  DEBUG_PRINTLN(" are DS18).");
 
   // Loop through each device, print out address and set resolution...
   for(int i=0;i<numberOfDevices; i++)
   {
-    if(sensors.getAddress(tempDeviceAddress, i))
+    if(sensors.getAddress(deviceAddresses[i], i))
     {
-      deviceAddresses[i] = addressToString(tempDeviceAddress);
 
-      Serial.print("[Sensor] Found device ");
-      Serial.print(i, DEC);
-      Serial.print(" with address " + deviceAddresses[i]);
-      Serial.println("."); 
+      String addressString = addressToString(deviceAddresses[i]);
+      deviceAddressStrings[i] = addressString;
 
-      Serial.print("[Sensor] Setting resolution to ");
-      Serial.print(TEMPERATURE_PRECISION, DEC);
-      Serial.println(" bits.");
-      sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
+      DEBUG_PRINT("[Sensor] Found device ");
+      DEBUG_PRINT(i, DEC);
+      DEBUG_PRINT(" with address " + addressString);
+      DEBUG_PRINTLN("."); 
+
+      DEBUG_PRINT("[Sensor] Setting resolution to ");
+      DEBUG_PRINT(TEMPERATURE_PRECISION, DEC);
+      DEBUG_PRINTLN(" bits.");
+      sensors.setResolution(deviceAddresses[i], TEMPERATURE_PRECISION);
       
-      Serial.print("[Sensor] Resolution currently set to: ");
-      Serial.print(sensors.getResolution(tempDeviceAddress), DEC); 
-      Serial.println();
+      DEBUG_PRINT("[Sensor] Resolution currently set to: ");
+      DEBUG_PRINT(sensors.getResolution(deviceAddresses[i]), DEC); 
+      DEBUG_PRINTLN();
 
       // Subscribing to alarm set temp...
-      mqttSubscribe(MQTT_PREFIX + deviceAddresses[i] + "/set-low");
-      mqttSubscribe(MQTT_PREFIX + deviceAddresses[i] + "/set-high");
+      mqttSubscribe(MQTT_PREFIX + addressString + "/set-low");
+      mqttSubscribe(MQTT_PREFIX + addressString + "/set-high");
 
       // Send the HA discovery packet if desired...
       if (HA_DISCOVERY) {
-        publishDiscovery(deviceAddresses[i]);
+        publishDiscovery(addressString);
       }
 
       // Publish alarm states...
-      publishPayload(MQTT_PREFIX + deviceAddresses[i] + "/alarm-low", String(sensors.getLowAlarmTemp(tempDeviceAddress)));
-      publishPayload(MQTT_PREFIX + deviceAddresses[i] + "/alarm-high", String(sensors.getHighAlarmTemp(tempDeviceAddress)));
+      publishPayload(MQTT_PREFIX + addressString + "/alarm-low", String(sensors.getLowAlarmTemp(deviceAddresses[i])));
+      publishPayload(MQTT_PREFIX + addressString + "/alarm-high", String(sensors.getHighAlarmTemp(deviceAddresses[i])));
 
     }else{
-      Serial.print("[Sensor] Found ghost device at ");
-      Serial.print(i, DEC);
-      Serial.print(" but could not detect address (check power and cabling).");
+      DEBUG_PRINT("[Sensor] Found ghost device at ");
+      DEBUG_PRINT(i, DEC);
+      DEBUG_PRINT(" but could not detect address (check power and cabling).");
     }
   }
     
 }
 
-void resetArrays() {
-  for(int i = 0; i < MAX_SENSORS; i++) {
-    deviceAddresses[i] = "";
-  }
-}
+// void resetArrays() {
+//   for(int i = 0; i < MAX_SENSORS; i++) {
+//     // Reset each byte of the DeviceAddress array to 0
+//     for (int j = 0; j < 8; j++) {
+//       deviceAddresses[i][j] = 0;  // or you can use 0xFF if you prefer
+//     }
+//   }
+// }
+
 
 void setLED(uint8_t nr, uint8_t ng, uint8_t nb) {
   
@@ -240,15 +255,15 @@ void setup() {
 
   Serial.begin(115200);
   delay(50);
-  Serial.println();
-  Serial.println();
+  DEBUG_PRINTLN();
+  DEBUG_PRINTLN();
 
   button.begin(BUTTON_PIN);
   button.setLongClickTime(1000);
   button.setDoubleClickTime(400);
 
-  Serial.println("[Button] DoubleClick Time: " + String(button.getDoubleClickTime()) + "ms");
-  Serial.println("[Button] Longpress Time: " + String(button.getLongClickTime()) + "ms");
+  DEBUG_PRINTLN("[Button] DoubleClick Time: " + String(button.getDoubleClickTime()) + "ms");
+  DEBUG_PRINTLN("[Button] Longpress Time: " + String(button.getLongClickTime()) + "ms");
   
   button.setClickHandler(click);
   button.setLongClickDetectedHandler(longClickDetected);
@@ -286,9 +301,9 @@ void readSensors() {
 
   setLED(0,0,50);
 
-  Serial.println("[Sensor] Requesting temperatures...");
+  DEBUG_PRINTLN("[Sensor] Requesting temperatures...");
   sensors.requestTemperatures();
-  Serial.println("[Sensor] Temperature  request complete.");
+  DEBUG_PRINTLN("[Sensor] Temperature  request complete.");
   
   // Reset the alarm...
   alarmState = false;
@@ -297,38 +312,31 @@ void readSensors() {
   for(int i=0;i<numberOfDevices; i++)
   {
 
-    // Search the wire for the address...
-    if(sensors.getAddress(tempDeviceAddress, i))
-    {
-
-      // Check for mismatch, and re-boot if needed...
-      String strAddress = addressToString(tempDeviceAddress);
-      if (strAddress != deviceAddresses[i]) { ESP.restart(); }
+      DeviceAddress &deviceAddress = deviceAddresses[i];
+      String &deviceAddressString = deviceAddressStrings[i];
 
       // Read the current temperature...
-      float tempC = sensors.getTempC(tempDeviceAddress);
+      float tempC = sensors.getTempC(deviceAddress);
       tempC = round(tempC*10)/10;
 
       if(tempC == DEVICE_DISCONNECTED_C) 
       {
         // Report if there is an error reading from the device...
-        Serial.println("[Sensor] Error: Could not read temperature data for " + strAddress + ".");
+        DEBUG_PRINTLN("[Sensor] Error: Could not read temperature data for " + deviceAddressString + ".");
       } else {
       
         // Log the address and reading...
-        Serial.println("[Sensor] Temperature for device " + strAddress + " is " + tempC + " C.");
+        DEBUG_PRINTLN("[Sensor] Temperature for device " + deviceAddressString + " is " + tempC + " C.");
         
         // Check the alarm...
-        bool isAlarming = sensors.hasAlarm(tempDeviceAddress);
+        bool isAlarming = sensors.hasAlarm(deviceAddress);
 
         // Set the global alarm state (for the LED)...
         alarmState = alarmState | isAlarming;
 
         // Publish an MQTT message...
-        publishPayload(MQTT_PREFIX + strAddress + "/temp", String(tempC));
-        publishPayload(MQTT_PREFIX + strAddress + "/alarm", String(isAlarming));
-
-      }
+        publishPayload(MQTT_PREFIX + deviceAddressString + "/temp", String(tempC));
+        publishPayload(MQTT_PREFIX + deviceAddressString + "/alarm", String(isAlarming));
       
     } 
 
@@ -340,15 +348,15 @@ void readSensors() {
 }
 
 void mqttSubscribe(String topic) {
-      Serial.print("[MQTT  ] Subscribing to ");
-      Serial.print(topic.c_str());
-      Serial.println(".");
+      DEBUG_PRINT("[MQTT  ] Subscribing to ");
+      DEBUG_PRINT(topic.c_str());
+      DEBUG_PRINTLN(".");
       mqttClient.subscribe(topic.c_str(), 2);
 }
 
 void publishPayload(String topic, String payload) {
     uint16_t packetIdPub = mqttClient.publish(topic.c_str(), 1, true, payload.c_str());
-    Serial.print("[MQTT  ] Publishing on topic " + topic + ", payload " + payload + ", packet ID=" + String(packetIdPub) + ".\n");
+    DEBUG_PRINT("[MQTT  ] Publishing on topic " + topic + ", payload " + payload + ", packet ID=" + String(packetIdPub) + ".\n");
 }
 
 void publishDiscovery(String device) {
@@ -404,16 +412,30 @@ String addressToString(DeviceAddress deviceAddress)
 // Button Click Functions...
 
 void click(Button2& btn) {
-    Serial.println("[Button] Click");
+    DEBUG_PRINTLN("[Button] Click");
     readSensors();
 }
 
 void longClickDetected(Button2& btn) {
-    Serial.println("[Button] Long Click");
+    DEBUG_PRINTLN("[Button] Long Click");
     //searchDevices();
     ESP.restart();
 }
 
 void doubleClick(Button2& btn) {
-    Serial.println("[Button] Double Click");
+    DEBUG_PRINTLN("[Button] Double Click");
+}
+
+// A helper function to convert a hexadecimal string to DeviceAddress (byte array)
+bool stringToDeviceAddress(const String &addressString, DeviceAddress &deviceAddress) {
+    if (addressString.length() != 16) {
+        return false;  // Invalid address length
+    }
+
+    for (int i = 0; i < 8; i++) {
+        String byteString = addressString.substring(i * 2, i * 2 + 2);
+        deviceAddress[i] = (uint8_t) strtol(byteString.c_str(), NULL, 16); // Convert hex string to byte
+    }
+
+    return true;
 }
