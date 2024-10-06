@@ -1,6 +1,8 @@
 #include "dallas2mqtt.h"
 #include "secrets.h"
 
+const long interval = 30000;          // Publish interval for sensor readings
+
 CRGB ledAtom[1];                      // FastLED array for 1 LED
 Button2 button;                       // Button object
 OneWire oneWire(ONE_WIRE_BUS);        // OneWire instance on the specified pin
@@ -12,7 +14,6 @@ TimerHandle_t wifiReconnectTimer;     // Timer for Wi-Fi reconnect
 
 int numberOfDevices;                  // Number of DS18B20 sensors found
 unsigned long previousMillis = 0;     // Used for timing sensor reads
-const long interval = 10000;          // Publish interval for sensor readings
 DeviceAddress tempDeviceAddress;      // Address for current DS18B20 sensor
 String deviceAddresses[MAX_SENSORS];  // Array to store sensor addresses
 bool alarmState = false;              // Global alarm state
@@ -94,12 +95,12 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     deviceAddress.replace("/set-low","");
     deviceAddress.toLowerCase();
 
-    Serial.println("[Sensor] Setting low alarm setpoint for device " + deviceAddress + " to " + String(payload) + " C.");
+    // Convert payload to int once and store it in a variable for reuse
+    int lowSetpoint = String(payload).toInt();
+    Serial.println("[Sensor] Setting low alarm setpoint for device " + deviceAddress + " to " + String(lowSetpoint) + " °C.");
+    setAlarmTemp(true, deviceAddress, lowSetpoint);
+    Serial.println("[Sensor] Low alarm setpoint for device " + deviceAddress + " successfully set to " + String(lowSetpoint) + " °C.");
 
-    setAlarmTemp(true, deviceAddress, String(payload).toInt());
-    
-    Serial.println("[Sensor] Low alarm setpoint for device " + deviceAddress + " set to " +  String(payload).toInt() + ".");
-  
   } else if (String(topic).endsWith("/set-high")) {
 
     // Get the address of the device to set...
@@ -108,11 +109,11 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     deviceAddress.replace("/set-high","");
     deviceAddress.toLowerCase();
 
-    Serial.println("[Sensor] Setting high alarm setpoint for device " + deviceAddress + " to " + String(payload) + " C.");
-
-    setAlarmTemp(false, deviceAddress, String(payload).toInt());
-
-    Serial.println("[Sensor] High alarm setpoint for device " + deviceAddress + " set to " +  String(payload).toInt() + ".");
+    // Convert payload to int once and store it in a variable for reuse
+    int highSetpoint = String(payload).toInt();
+    Serial.println("[Sensor] Setting high alarm setpoint for device " + deviceAddress + " to " + String(highSetpoint) + " °C.");
+    setAlarmTemp(false, deviceAddress, highSetpoint);
+    Serial.println("[Sensor] High alarm setpoint for device " + deviceAddress + " successfully set to " + String(highSetpoint) + " °C.");
     
   }
 
@@ -120,7 +121,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 
 void setAlarmTemp(bool isLow, String deviceAddress, int8_t temp) {
 
-    // Loop through each device and print out temperature data...
+    // Loop through each device on the bus...
     for(int i=0;i<numberOfDevices; i++)
     {
 
@@ -352,25 +353,39 @@ void publishPayload(String topic, String payload) {
 
 void publishDiscovery(String device) {
 
-  // Send HA discovery packet for temperature sensor...
+  // Define the device object that will be shared across all entities
+  String deviceInfo = "{\"identifiers\": [\"" + String(HA_PREFIX) + device + "\"], \"name\": \"" + device + "\", \"model\": \"Temperature Sensor\", \"manufacturer\": \"" + String(HA_MANUFACTURER) + "\"}";
+
+  // Send HA discovery packet for temperature sensor (1 decimal place)...
   String discoveryTopic = "homeassistant/sensor/" + String(HA_PREFIX) + device + "/config";
-  String discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-temp\",\"name\": \"Temperature (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/temp\",\"unit_of_measurement\": \"°C\",\"value_template\": \"{{ value | round(1) }}\"}";
+  String discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-temp\",\"name\": \"Temperature\",\"state_topic\": \"" + MQTT_PREFIX + device + "/temp\",\"unit_of_measurement\": \"°C\",\"value_template\": \"{{ value | round(1) }}\", \"device\":" + deviceInfo + "}";
   publishPayload(discoveryTopic, discoveryPayload);
 
-  // Send HA discovery packet for alarm setpoints...
+  // Send HA discovery packet for alarm setpoints (0 decimal places)...
   discoveryTopic = "homeassistant/sensor/" + String(HA_PREFIX) + device + "-alarm-low/config";
-  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm-low\",\"name\": \"Low Alarm Setpoint (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-low\",\"unit_of_measurement\": \"°C\"}";
+  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm-low\",\"name\": \"Low Alarm Setpoint\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-low\",\"unit_of_measurement\": \"°C\",\"value_template\": \"{{ value | round(0) }}\", \"device\":" + deviceInfo + "}";
   publishPayload(discoveryTopic, discoveryPayload);
+  
   discoveryTopic = "homeassistant/sensor/" + String(HA_PREFIX) + device + "-alarm-high/config";
-  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm-high\",\"name\": \"High Alarm Setpoint (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-high\",\"unit_of_measurement\": \"°C\"}";
+  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm-high\",\"name\": \"High Alarm Setpoint\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-high\",\"unit_of_measurement\": \"°C\",\"value_template\": \"{{ value | round(0) }}\", \"device\":" + deviceInfo + "}";
   publishPayload(discoveryTopic, discoveryPayload);
 
   // Send HA discovery packet for alarm state...
   discoveryTopic = "homeassistant/binary_sensor/" + String(HA_PREFIX) + device + "/config";
-  discoveryPayload = "{\"device_class\": \"safety\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm\",\"name\": \"Alarm (" + device + ")\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\", \"payload_off\": \"0\", \"payload_on\": \"1\"}";
+  discoveryPayload = "{\"device_class\": \"safety\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-alarm\",\"name\": \"Alarm\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm\", \"payload_off\": \"0\", \"payload_on\": \"1\", \"device\":" + deviceInfo + "}";
   publishPayload(discoveryTopic, discoveryPayload);
 
+  // Send HA discovery packet for setpoint inputs (low setpoint, 0 decimal places)...
+  discoveryTopic = "homeassistant/number/" + String(HA_PREFIX) + device + "-set-low/config";
+  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-set-low\",\"name\": \"Low Setpoint\",\"command_topic\": \"" + MQTT_PREFIX + device + "/set-low\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-low\",\"unit_of_measurement\": \"°C\",\"min\": 0,\"max\": 100,\"step\": 1, \"value_template\": \"{{ value | round(0) }}\", \"device\":" + deviceInfo + "}";
+  publishPayload(discoveryTopic, discoveryPayload);
+
+  // Send HA discovery packet for setpoint inputs (high setpoint, 0 decimal places)...
+  discoveryTopic = "homeassistant/number/" + String(HA_PREFIX) + device + "-set-high/config";
+  discoveryPayload = "{\"device_class\": \"temperature\",\"unique_id\": \"" + String(HA_PREFIX) + device + "-set-high\",\"name\": \"High Setpoint\",\"command_topic\": \"" + MQTT_PREFIX + device + "/set-high\",\"state_topic\": \"" + MQTT_PREFIX + device + "/alarm-high\",\"unit_of_measurement\": \"°C\",\"min\": 0,\"max\": 100,\"step\": 1, \"value_template\": \"{{ value | round(0) }}\", \"device\":" + deviceInfo + "}";
+  publishPayload(discoveryTopic, discoveryPayload);
 }
+
 
 // Convert device address to string...
 String addressToString(DeviceAddress deviceAddress)

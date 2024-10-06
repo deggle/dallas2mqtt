@@ -7,7 +7,7 @@
 #define MQTT_PASSWORD "Password"
 #define MQTT_PREFIX "prefix/env/"
 
-
-
 #define HA_DISCOVERY true
 #define HA_PREFIX "prefix-env-"
+
+#define HA_MANUFACTURER "Deggle"
